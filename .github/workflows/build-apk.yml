@@ -41,7 +41,9 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          unset GRADLE_OPTS
+          unset JAVA_TOOL_OPTIONS
+          unset _JAVA_OPTIONS
+          unset JDK_JAVA_OPTIONS
           ./gradlew assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
