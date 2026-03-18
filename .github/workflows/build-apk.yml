@@ -79,7 +79,6 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
         env:
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Xmx3g -XX:MaxMetaspaceSize=512m"
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Upload Debug APK
@@ -156,7 +155,6 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon
         env:
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx3g -XX:MaxMetaspaceSize=512m"
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Get Release Info
