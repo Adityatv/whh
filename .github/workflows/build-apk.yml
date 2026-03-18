@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -30,16 +33,34 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # gradle-wrapper.jar is often missing from repos — download it if absent
+      - name: Set Up Android SDK
+        run: |
+          ANDROID_SDK="/usr/local/lib/android/sdk"
+          echo "ANDROID_HOME=$ANDROID_SDK" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK" >> $GITHUB_ENV
+          echo "$ANDROID_SDK/platform-tools" >> $GITHUB_PATH
+          echo "sdk.dir=$ANDROID_SDK" > local.properties
+          echo "local.properties written: sdk.dir=$ANDROID_SDK"
+
+      - name: Install SDK Platform 34
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            --sdk_root=$ANDROID_HOME 2>/dev/null || true
+
       - name: Restore Gradle Wrapper JAR
         run: |
-          JAR_PATH="gradle/wrapper/gradle-wrapper.jar"
-          if [ ! -f "$JAR_PATH" ]; then
-            echo "Downloading gradle-wrapper.jar for Gradle 8.6..."
+          JAR="gradle/wrapper/gradle-wrapper.jar"
+          if [ ! -f "$JAR" ]; then
+            echo "Downloading gradle-wrapper.jar (Gradle 8.6)..."
             mkdir -p gradle/wrapper
             curl -fsSL \
               "https://github.com/gradle/gradle/raw/refs/tags/v8.6.0/gradle/wrapper/gradle-wrapper.jar" \
-              -o "$JAR_PATH"
+              -o "$JAR"
+            echo "Downloaded: $(du -sh $JAR)"
+          else
+            echo "gradle-wrapper.jar already present."
           fi
 
       - name: Make gradlew Executable
@@ -56,9 +77,10 @@ jobs:
             gradle-${{ runner.os }}-
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Xmx3g -XX:MaxMetaspaceSize=512m"
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -76,7 +98,7 @@ jobs:
           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Min SDK | 24 (Android 7.0+) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📥 Download the APK from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
+          echo "📥 Download from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
 
   release:
     name: Create GitHub Release
@@ -94,14 +116,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set Up Android SDK
+        run: |
+          ANDROID_SDK="/usr/local/lib/android/sdk"
+          echo "ANDROID_HOME=$ANDROID_SDK" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK" >> $GITHUB_ENV
+          echo "sdk.dir=$ANDROID_SDK" > local.properties
+
+      - name: Install SDK Platform 34
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            --sdk_root=$ANDROID_HOME 2>/dev/null || true
+
       - name: Restore Gradle Wrapper JAR
         run: |
-          JAR_PATH="gradle/wrapper/gradle-wrapper.jar"
-          if [ ! -f "$JAR_PATH" ]; then
+          JAR="gradle/wrapper/gradle-wrapper.jar"
+          if [ ! -f "$JAR" ]; then
             mkdir -p gradle/wrapper
             curl -fsSL \
               "https://github.com/gradle/gradle/raw/refs/tags/v8.6.0/gradle/wrapper/gradle-wrapper.jar" \
-              -o "$JAR_PATH"
+              -o "$JAR"
           fi
 
       - name: Make gradlew Executable
@@ -121,6 +157,7 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx3g -XX:MaxMetaspaceSize=512m"
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Get Release Info
         id: info
@@ -139,16 +176,16 @@ jobs:
           tag_name: "v1.0.0-${{ steps.info.outputs.SHORT_SHA }}"
           name: "iMusic v1.0.0 — ${{ steps.info.outputs.DATE }}"
           body: |
-            ## 🎵 iMusic — Free Music Streaming
+            ## iMusic — Free Music Streaming
 
-            **Build:** `${{ steps.info.outputs.SHORT_SHA }}` · `${{ steps.info.outputs.DATE }}`
+            Build: ${{ steps.info.outputs.SHORT_SHA }} — ${{ steps.info.outputs.DATE }}
 
-            ### 📥 How to install
-            1. Download **`${{ steps.info.outputs.APK_NAME }}`** below
-            2. Android phone → **Settings → Security → Install Unknown Apps** → enable
-            3. Open the APK → **Install** → enjoy!
+            ### How to install
+            1. Download the APK below
+            2. Android: Settings > Security > Install Unknown Apps > enable
+            3. Open APK > Install > enjoy 600K+ free songs
 
-            **Requires:** Android 7.0+ (API 24)
+            Requires Android 7.0+ (API 24)
           files: ${{ steps.info.outputs.APK_PATH }}
           draft: false
           prerelease: false
